@@ -68,7 +68,8 @@ def splat_order(src: trigs.TrigsRuntime, count: int) -> np.ndarray:
 
 def encode(src: str | Path, dst: str | Path, *, qp: float = 2.0, qa: float = 8.0, prune: float = 0.3,
            mbits: int = 14, tbits: int = 11, lsbits: int = 8, shk: int = 65536, level: int = 9,
-           audio: str | Path | None = None) -> EncodeStats:
+           audio: str | Path | None = None,
+           palette_device: str | None = None) -> EncodeStats:
     """Encode the `.trigsbin` file `src` to the `.asog` file `dst`.
 
     qp:     motion step, file units x 1e-3 of displacement over a splat's visible life
@@ -80,6 +81,7 @@ def encode(src: str | Path, dst: str | Path, *, qp: float = 2.0, qa: float = 8.0
     shk:    largest SH palette (the palette has about one entry per 16 splats)
     level:  zlib level
     audio:  sound file to embed (mp3, ogg, ...), looped with the clip by players
+    palette_device: "cuda" / "cpu" for the SH palette k-means (default: CUDA when available)
     """
     t0 = time.time()
     source = trigs.read(src)
@@ -126,7 +128,7 @@ def encode(src: str | Path, dst: str | Path, *, qp: float = 2.0, qa: float = 8.0
     if s.shN is not None:
         coeffs = s.shN.shape[1]
         k = quantize.palette_size(n, shk)
-        centroids, labels = quantize.sh_palette(s.shN.reshape(n, -1), k)
+        centroids, labels = quantize.sh_palette(s.shN.reshape(n, -1), k, palette_device)
         cb, cidx = quantize.codebook1d(centroids)
         meta["shN"] = dict(codebook=cb.tolist(), count=k, coeffs=coeffs)
         add("shlabels", labels)

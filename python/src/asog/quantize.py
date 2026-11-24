@@ -35,18 +35,25 @@ def palette_size(n: int, limit: int) -> int:
     return min(limit, max(64, 2 ** int(np.log2(n / 16))))
 
 
-def sh_palette(x: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+def sh_palette(x: np.ndarray, k: int, device: str | None = None) -> tuple[np.ndarray, np.ndarray]:
     """k-means of the rows of `x` `[n, d]` (float32) into `k` centroids: returns centroids `[k, d]`, labels `[n]`.
 
-    Seeded, but GPU reductions are not bit-reproducible, so labels can differ slightly between runs.
+    `device`: "cuda", "cpu" (PyTorch on the CPU, no size limit, minutes for ~1M splats) or None (CUDA when
+    available, else NumPy). Seeded, but GPU reductions are not bit-reproducible, so labels can differ slightly
+    between runs.
     """
+    if device not in (None, "cuda", "cpu"):
+        raise ValueError(f"palette device {device!r}, expected 'cuda' or 'cpu'")
     try:
         import torch
         cuda = torch.cuda.is_available()
     except ImportError:
-        cuda = False
-    if cuda:
+        torch, cuda = None, False
+    if device == "cuda" or (device is None and cuda):
         return _palette_torch(x, k)
+    if device == "cpu" and torch is not None:
+        log.info("  SH palette on the CPU (PyTorch)")
+        return _palette_torch(x, k, "cpu")
     if len(x) * k > NUMPY_PALETTE_LIMIT:
         raise RuntimeError(f"the SH palette of {len(x)} splats x {k} entries needs PyTorch with CUDA "
                            "(pip install animated-sog[palette]); without a GPU, encode fewer splats")
@@ -54,18 +61,18 @@ def sh_palette(x: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     return _palette_numpy(x, k)
 
 
-def _palette_torch(x: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+def _palette_torch(x: np.ndarray, k: int, dev: str = "cuda") -> tuple[np.ndarray, np.ndarray]:
     import torch
-    dev = "cuda"
     n = len(x)
+    rows = 16384 if dev == "cuda" else max(256, min(16384, 2 ** 28 // max(k, 1)))   # CPU: <= 1 GB of distances
     X = torch.from_numpy(np.ascontiguousarray(x, np.float32)).to(dev)
     gen = torch.Generator(device=dev).manual_seed(0)
     C = X[torch.randperm(n, device=dev, generator=gen)[:k]].clone()
     lab = torch.empty(n, dtype=torch.long, device=dev)
     for it in range(PALETTE_ITERATIONS):
         cn = (C * C).sum(1)
-        for s in range(0, n, 16384):
-            lab[s:s + 16384] = (cn[None] - 2 * X[s:s + 16384] @ C.T).argmin(1)
+        for s in range(0, n, rows):
+            lab[s:s + rows] = (cn[None] - 2 * X[s:s + rows] @ C.T).argmin(1)
         if it == PALETTE_ITERATIONS - 1:
             break
         S = torch.zeros_like(C).index_add_(0, lab, X)

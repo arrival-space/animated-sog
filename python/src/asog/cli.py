@@ -31,6 +31,11 @@ def _encode_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--audio", type=Path, help="sound file to embed, looped with the clip")
 
 
+def _source_args(p: argparse.ArgumentParser) -> None:
+    """Fixes for .trigsbin sources other than the flip-book pipeline's (which flips its checkpoint itself)."""
+    p.add_argument("--palette-device", choices=("cuda", "cpu"), help="SH palette k-means device (default: CUDA if available)")
+
+
 def _train_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--fps", type=float, default=30, help="training frame rate")
     p.add_argument("--keyframe-stride", type=int, help="every n-th frame seeds the 4D init (default 9; 1 with --recipe dense)")
@@ -68,7 +73,8 @@ def _pick(args: argparse.Namespace, names: tuple[str, ...]) -> dict:
 
 def cmd_encode(args: argparse.Namespace) -> None:
     from .encode import encode
-    encode(args.src, args.dst, audio=args.audio, **_pick(args, ENCODE_OPTIONS))
+    encode(args.src, args.dst, audio=args.audio,
+           palette_device=args.palette_device, **_pick(args, ENCODE_OPTIONS))
 
 
 def cmd_info(args: argparse.Namespace) -> None:
@@ -122,6 +128,7 @@ def parser() -> argparse.ArgumentParser:
         p.add_argument("src", type=Path)
         p.add_argument("dst", type=Path)
         _encode_args(p)
+        _source_args(p)
         p.set_defaults(func=cmd_encode)
 
     encode_parser(sub)
