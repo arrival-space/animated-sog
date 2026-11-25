@@ -6,6 +6,10 @@ const params = new URLSearchParams(location.search);
 const src = params.get("src") ?? "../../test-data/rubloff-6s-4k.asog";
 const useWebgpu = params.has("webgpu") ? params.get("webgpu") !== "0" : !!navigator.gpu;
 const soundVolume = params.has("volume") ? Number(params.get("volume")) : 1;
+// start view (optional): target=x,y,z and cam=x,y,z in the clip's own coordinates (cam sets distance and angles),
+// zoom=<factor on the framed distance>, yaw=<deg>, pitch=<deg>, spin=0 stops the idle auto-rotate
+const vec3Param = (name) => params.get(name)?.split(",").map(Number);
+const spin = params.get("spin") !== "0";
 
 const $ = (id) => document.getElementById(id);
 const info = $("info"), playButton = $("play"), scrub = $("scrub"), clockLabel = $("clock"), soundButton = $("sound");
@@ -77,7 +81,7 @@ canvas.addEventListener("wheel", (e) => {
 const camRotation = new pc.Quat();
 const camOffset = new pc.Vec3();
 function updateCamera(dt) {
-    if (!drag && performance.now() - orbit.idleSince > 2500) orbit.yaw += 8 * dt; // slow auto-rotate
+    if (spin && !drag && performance.now() - orbit.idleSince > 2500) orbit.yaw += 8 * dt; // slow auto-rotate
     camRotation.setFromEulerAngles(orbit.pitch, orbit.yaw, 0);
     camRotation.transformVector(pc.Vec3.BACK, camOffset).mulScalar(orbit.distance);
     camera.setPosition(camOffset.add(orbit.target));
@@ -149,6 +153,19 @@ try {
     player.entity.getWorldTransform().transformPoint(centre, orbit.target);
     const size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
     orbit.distance = size / (2 * Math.tan(25 * Math.PI / 180)) * 1.25;
+    const toWorld = (v) => player.entity.getWorldTransform().transformPoint(new pc.Vec3(...v), new pc.Vec3());
+    const target = vec3Param("target"), cam = vec3Param("cam");
+    if (target) orbit.target.copy(toWorld(target));
+    if (cam) {
+        // the orbit puts the camera at target + R(pitch, yaw) * BACK * distance
+        const d = toWorld(cam).sub(orbit.target);
+        orbit.distance = d.length();
+        orbit.yaw = Math.atan2(d.x, d.z) * 180 / Math.PI;
+        orbit.pitch = -Math.asin(d.y / orbit.distance) * 180 / Math.PI;
+    }
+    if (params.has("zoom")) orbit.distance *= Number(params.get("zoom"));
+    if (params.has("yaw")) orbit.yaw += Number(params.get("yaw"));
+    if (params.has("pitch")) orbit.pitch += Number(params.get("pitch"));
     if (player.hasAudio) {
         soundButton.hidden = false;
         soundButton.addEventListener("click", async () => {
