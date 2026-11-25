@@ -75,7 +75,7 @@ export function evaluateSplatAt(data, i, t) {
     const cw = clipWeight(data.clips, m.clip, t);
     if (cw <= 0) return { center: [m.x, m.y, m.z], rotation: Array.from(base), weight: 0 };
     const out = new Float64Array(7);
-    const weight = cw * evaluateSplat(m, t - data.clips[m.clip * 8], out);
+    const weight = cw * evaluateSplat(m, t - data.clips[m.clip * 8], out, data.clips[m.clip * 8 + 3]);
     return { center: [out[0], out[1], out[2]], rotation: /** @type {number[]} */ (quatMultiply(out.subarray(3), base)), weight };
 }
 

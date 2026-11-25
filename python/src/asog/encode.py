@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from . import container, quantize, trigs
-from .motion import bezier2
+from .motion import TEMPORAL_THRESHOLD, bezier2
 
 log = logging.getLogger(__name__)
 
@@ -80,9 +80,16 @@ def encode(src: str | Path, dst: str | Path, *, qp: float = 2.0, qa: float = 8.0
     shk:    largest SH palette (the palette has about one entry per 16 splats)
     level:  zlib level
     audio:  sound file to embed (mp3, ogg, ...), looped with the clip by players
+
+    The temporal opacity threshold is taken from the source (`semantics.temporalCullThreshold` with
+    `temporalOpacityMode: smooth_cull_renormalized`) and written as `motion.threshold` (left out when it is the default 0.05).
     """
     t0 = time.time()
     source = trigs.read(src)
+    threshold = trigs.temporal_threshold(source.manifest)
+    threshold = TEMPORAL_THRESHOLD if threshold is None else threshold
+    # visible life +-sm sigma: where the temporal weight reaches 0 (2.45 kept for the default 0.05)
+    sm = SM if threshold == TEMPORAL_THRESHOLD else round(float(np.sqrt(-2 * np.log(threshold))), 4)
     n_dyn = int((~source.static).sum())
     count = source.count - int(round(prune * n_dyn))
     s = source.take(splat_order(source, count))
@@ -141,7 +148,7 @@ def encode(src: str | Path, dst: str | Path, *, qp: float = 2.0, qa: float = 8.0
     add("logsigma", qls)
     meta["mu"] = dict(scale=2 ** tbits)
     meta["logsigma"] = dict(min=float(lsmin), max=float(lsmax), bits=lsbits)
-    life = SM * np.exp(lsmin + qls / (2 ** lsbits - 1) * (lsmax - lsmin))   # decoded sigma's visible life
+    life = sm * np.exp(lsmin + qls / (2 ** lsbits - 1) * (lsmax - lsmin))   # decoded sigma's visible life
     # ---- motion, life-scaled: the Omega control points times the life are rotation angles over the life
     qpv = qp / 1000
     qan = np.where(dyn[:, None], np.round(s.anchors * 1000 / qa), 0).astype(np.int64)
@@ -166,7 +173,9 @@ def encode(src: str | Path, dst: str | Path, *, qp: float = 2.0, qa: float = 8.0
     q_g = np.stack([np.where(dyn, np.round(g[j] / (mref * qpv * w_g[j])), 0) for j in range(5)], 1).astype(np.int64)
     add("omega", np.concatenate(q_o, 1))
     add("g", q_g)
-    meta["motion"] = dict(qp=qp, qa=qa, sm=SM, midO=MID_O, midG=MID_G, mref_samples=MREF_SAMPLES, r_min=R_MIN)
+    meta["motion"] = dict(qp=qp, qa=qa, sm=sm, midO=MID_O, midG=MID_G, mref_samples=MREF_SAMPLES, r_min=R_MIN)
+    if threshold != TEMPORAL_THRESHOLD:   # absent = the 0.05 default, so default files are unchanged
+        meta["motion"]["threshold"] = threshold
     add("flags", s.static.astype(np.int64) | (s.clip << 1))
 
     man = source.manifest

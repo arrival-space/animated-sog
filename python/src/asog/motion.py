@@ -7,14 +7,14 @@ from __future__ import annotations
 
 import numpy as np
 
-TEMPORAL_THRESHOLD = 0.05   # opacity cut of the temporal Gaussian
+TEMPORAL_THRESHOLD = 0.05   # opacity cut of the temporal Gaussian (default of `motion.threshold`)
 SH_C0 = 0.28209479177387814
 
 
-def temporal_weight(dt: np.ndarray, sigma: np.ndarray) -> np.ndarray:
+def temporal_weight(dt: np.ndarray, sigma: np.ndarray, threshold: float = TEMPORAL_THRESHOLD) -> np.ndarray:
     """Opacity factor of a dynamic splat `dt` seconds from its centre time."""
     gamma = np.exp(-0.5 * (dt / sigma) ** 2)
-    return np.maximum((gamma - TEMPORAL_THRESHOLD) / (1 - TEMPORAL_THRESHOLD), 0)
+    return np.maximum((gamma - threshold) / (1 - threshold), 0)
 
 
 def life_tau(dt: np.ndarray, sigma: np.ndarray) -> np.ndarray:

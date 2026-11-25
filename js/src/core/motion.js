@@ -6,7 +6,10 @@
  * their source text into a worker.
  */
 
-/** The temporal opacity cut: weight = max((γ − 0.05) / (1 − 0.05), 0). Literal in temporalWeight(). */
+/**
+ * The default temporal opacity cut th: weight = max((γ − th) / (1 − th), 0). A file can set its own in
+ * `motion.threshold` (clip table slot 3). Literal in the defaults of temporalWeight() / evaluateSplat().
+ */
 export const TEMPORAL_THRESHOLD = 0.05;
 
 /**
@@ -39,11 +42,12 @@ export function createMotion() {
  * Temporal weight of a dynamic splat, `dt` seconds from its centre time.
  * @param {number} dt
  * @param {number} sigma
+ * @param {number} [th] - temporal opacity cut (clip table slot 3)
  * @returns {number} 0..1
  */
-export function temporalWeight(dt, sigma) {
+export function temporalWeight(dt, sigma, th = 0.05) {
     const x = dt / sigma;
-    return Math.max((Math.exp(-0.5 * x * x) - 0.05) / (1 - 0.05), 0);
+    return Math.max((Math.exp(-0.5 * x * x) - th) / (1 - th), 0);
 }
 
 /**
@@ -73,14 +77,15 @@ export function clipWeight(clips, c, t) {
  * @param {SplatMotion} m
  * @param {number} t - clip-local time (seconds)
  * @param {Float64Array | Float32Array | number[]} out - 7 values
+ * @param {number} [cut] - temporal opacity cut (clip table slot 3)
  * @returns {number} temporal weight (opacity factor; 1 for a static splat, 0 = invisible)
  */
-export function evaluateSplat(m, t, out) {
+export function evaluateSplat(m, t, out, cut = 0.05) {
     out[0] = m.x; out[1] = m.y; out[2] = m.z;
     out[3] = 0; out[4] = 0; out[5] = 0; out[6] = 1;
     if (m.isStatic) return 1;
     const sigma = m.sigma, dt = t - m.mu;
-    const weight = temporalWeight(dt, sigma);
+    const weight = temporalWeight(dt, sigma, cut);
     if (weight <= 0) return 0;
 
     const tau = Math.min(1, Math.max(0, (t - (m.mu - 2 * sigma)) / (4 * sigma)));
@@ -167,10 +172,10 @@ export function evaluateCenters(n, centers, A, B, clips, half, t, out) {
         if (aw & 0x10000) continue;
         const clip = aw >>> 17;
         if (clipWeight(clips, clip, t) <= 0) continue;
-        const lt = t - clips[clip * 8];
-        if (temporalWeight(lt - Af[a], Af[a + 1]) <= 0) continue;
+        const lt = t - clips[clip * 8], th = clips[clip * 8 + 3];
+        if (temporalWeight(lt - Af[a], Af[a + 1], th) <= 0) continue;
         readMotion(A, Af, B, half, centers, i, m);
-        evaluateSplat(m, lt, r);
+        evaluateSplat(m, lt, r, th);
         out[i * 3] = r[0];
         out[i * 3 + 1] = r[1];
         out[i * 3 + 2] = r[2];

@@ -42,7 +42,7 @@ export function sortSplats(n, centers, A, clips, t, depthRow, indices, scratch =
     for (let i = 0; i < n; i++) {
         const a = i * 4, aw = A[a + 3], clip = aw >>> 17;
         if (clipW[clip] <= 0) continue;
-        if (!(aw & 0x10000) && temporalWeight(Math.max(Math.abs(t - clips[clip * 8] - Af[a]) - margin, 0), Af[a + 1]) <= 0) continue;
+        if (!(aw & 0x10000) && temporalWeight(Math.max(Math.abs(t - clips[clip * 8] - Af[a]) - margin, 0), Af[a + 1], clips[clip * 8 + 3]) <= 0) continue;
         const p = i * 3;
         depths[count] = r0 * centers[p] + r1 * centers[p + 1] + r2 * centers[p + 2] + r3;
         const d = depths[count]; // as stored (float32), so that the keys below stay in 0..65535

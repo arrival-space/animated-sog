@@ -4,11 +4,9 @@
  * Reads the motion from motionA / motionB and the clip table (core/layout.js).
  */
 import { MOTION_B_TEXELS, MOTION_TEX_WIDTH } from "../core/layout.js";
-import { TEMPORAL_THRESHOLD } from "../core/motion.js";
 
 const W = MOTION_TEX_WIDTH;
 const BT = MOTION_B_TEXELS;
-const TH = TEMPORAL_THRESHOLD.toFixed(4);
 
 export const ASOG_CHUNK_GLSL = /* glsl */ `
 uniform highp usampler2D uAsogA;
@@ -55,7 +53,7 @@ void modifySplatCenter(inout vec3 center) {
     float sigma = uintBitsToFloat(a.y);
     float dt = lt - mu;
     float g = exp(-0.5 * (dt / sigma) * (dt / sigma));
-    gAsogWeight *= max((g - ${TH}) / (1.0 - ${TH}), 0.0);
+    gAsogWeight *= max((g - c0.w) / (1.0 - c0.w), 0.0);   // c0.w: temporal opacity cut
     if (gAsogWeight <= 0.0) return;
 
     float tau = clamp((lt - (mu - 2.0 * sigma)) / (4.0 * sigma), 0.0, 1.0);
@@ -157,7 +155,7 @@ fn modifySplatCenter(center: ptr<function, vec3f>) {
     let sigma = bitcast<f32>(a.y);
     let dt = lt - mu;
     let g = exp(-0.5 * (dt / sigma) * (dt / sigma));
-    gAsogWeight = weight * max((g - ${TH}) / (1.0 - ${TH}), 0.0);
+    gAsogWeight = weight * max((g - c0.w) / (1.0 - c0.w), 0.0);   // c0.w: temporal opacity cut
     if (gAsogWeight <= 0.0) { return; }
 
     let tau = clamp((lt - (mu - 2.0 * sigma)) / (4.0 * sigma), 0.0, 1.0);

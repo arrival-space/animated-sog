@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from . import container
-from .motion import bezier2, bezier4, life_tau, quat_mul, screw, temporal_weight
+from .motion import TEMPORAL_THRESHOLD, bezier2, bezier4, life_tau, quat_mul, screw, temporal_weight
 
 
 @dataclass
@@ -69,7 +69,8 @@ class Asog:
         """The clip at timeline time `t` (seconds)."""
         weights, local_t = self.clip_weights(t)
         dt = local_t - self.mu
-        weights = np.where(self.static, weights, weights * temporal_weight(dt, self.sigma))
+        th = self.manifest["motion"].get("threshold", TEMPORAL_THRESHOLD)
+        weights = np.where(self.static, weights, weights * temporal_weight(dt, self.sigma, th))
         positions, rotations = self.means.copy(), self.quats.copy()
         m = np.nonzero(~self.static & (weights > 0))[0]
         if len(m):

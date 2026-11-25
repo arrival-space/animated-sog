@@ -37,6 +37,10 @@ asog flipbook stage|train|flip|export|encode|evaluate|run ...
 | `--level` | 9 | zlib level |
 | `--audio` | | sound file embedded after the streams; players loop it with the clip |
 
+The temporal opacity threshold is read from the source (`semantics.temporalCullThreshold` with
+`temporalOpacityMode: smooth_cull_renormalized`, e.g. 0.01 for Open4DGS runs) and written as `motion.threshold`;
+the decoders and players use it (0.05 when absent).
+
 Measured on Charlie (900k splats): 28.9 MB from 319 MB, 45.3 dB mean over 6 views against the original
 with SH; `--qp 0.5 --prune 0`: 47.8 MB, 46.6 dB. Pruning beyond 40% loses visible detail.
 

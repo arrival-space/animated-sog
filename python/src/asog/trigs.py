@@ -121,3 +121,12 @@ def read(path: str | Path) -> TrigsRuntime:
     quats /= np.maximum(np.linalg.norm(quats, axis=1, keepdims=True), 1e-12)
     return TrigsRuntime(man, means, log_scales, quats, opacity, sh0, shN, times, log_durations, anchors,
                         omega, nu, static, clip_index)
+
+
+def temporal_threshold(man: dict) -> float | None:
+    """The temporal opacity threshold the source was trained and exported with, when its temporal weight is
+    the renormalised `max((gamma - th) / (1 - th), 0)` (`temporalOpacityMode: smooth_cull_renormalized`)."""
+    sem = man.get("semantics", {})
+    if sem.get("temporalOpacityMode") == "smooth_cull_renormalized" and "temporalCullThreshold" in sem:
+        return float(sem["temporalCullThreshold"])
+    return None

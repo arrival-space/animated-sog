@@ -41,7 +41,8 @@ order a decoder needs them (section 3.2), so a file can be decoded while it down
   "shN":      { "codebook": [256 floats], "count": K, "coeffs": 15 },  // absent without SH
   "mu":       { "scale": 2048 },
   "logsigma": { "min": float, "max": float, "bits": 8 },
-  "motion":   { "qp": 2, "qa": 8, "sm": 2.45, "midO": 3, "midG": 2, "mref_samples": 9, "r_min": 0.02 },
+  "motion":   { "qp": 2, "qa": 8, "sm": 2.45, "midO": 3, "midG": 2, "mref_samples": 9, "r_min": 0.02,
+                "threshold": 0.05 },                                // threshold optional, default 0.05 (4.1)
   "audio":    { "mime": "audio/mpeg", "byteOffset": int, "byteLength": int },      // optional
   "streams":  [ { "name", "count", "channels", "planes", "delta", "zigzag", "byteOffset", "byteLength" } ]
 }
@@ -104,7 +105,8 @@ twist whose rotation part `ω(τ)` and translation part `ν(τ)` are quadratic B
 At clip-local time `t`, with `Δt = t − μ`:
 
 ```
-weight  = max((γ − 0.05) / (1 − 0.05), 0),   γ = exp(−½ (Δt / σ)²)        opacity *= weight
+weight  = max((γ − th) / (1 − th), 0),   γ = exp(−½ (Δt / σ)²)            opacity *= weight
+           th = motion.threshold (default 0.05; Open4DGS runs train with 0.01)
 τ       = clamp((t − (μ − 2σ)) / (4σ), 0, 1),  b0 = (1−τ)², b1 = 2(1−τ)τ, b2 = τ²
 ω       = b0·O0 + b1·O1 + b2·O2
 g       = b0²·G0 + 2b0b1·G1 + (b1² + 2b0b2)·G2 + 2b1b2·G3 + b2²·G4
@@ -126,7 +128,8 @@ motion, which `g = ν·ω` (a quartic in τ) captures exactly: 17 values (9 + 5 
 μ        = q_mu / mu.scale
 σ        = exp(logsigma.min + q / (2^bits − 1) · (logsigma.max − logsigma.min))
 L        = motion.sm · σ                                  (≈ half-width of the visible life, seconds; the 0.05
-                                                           cut is at ±2.4477σ, `sm` = 2.45 only scales the steps)
+                                                           cut is at ±2.4477σ, `sm` = 2.45 only scales the steps;
+                                                           the reference encoder writes √(−2 ln th) for another th)
 a        = q_anchor · motion.qa / 1000
 step_O   = (motion.qp / 1000) / max(|x − a|, motion.r_min)   (x = decoded position)
 O_k      = q_omega[k] · step_O · wO[k] / L,      wO = [1, midO, 1]

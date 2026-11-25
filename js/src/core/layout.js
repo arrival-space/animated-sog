@@ -17,9 +17,11 @@
  *   motionB  RGBA16F, MOTION_B_TEXELS (4) texels a splat, 16 halves:
  *            O0.xyz O1.xyz O2.xyz G0 G1 G2 G3 G4, 2 unused
  *
- * Clip table (RGBA32F, 2 × clips): per clip (timeOffset, activeStart, activeEnd, 0),
- * (coreStart, coreEnd, fadeIn, fadeOut), all in seconds.
+ * Clip table (RGBA32F, 2 × clips): per clip (timeOffset, activeStart, activeEnd, threshold),
+ * (coreStart, coreEnd, fadeIn, fadeOut), times in seconds; threshold is the temporal opacity cut
+ * (manifest `motion.threshold`, default 0.05), the same for every clip of a file.
  */
+import { TEMPORAL_THRESHOLD } from "./motion.js";
 
 export const MOTION_TEX_WIDTH = 4096;
 export const MOTION_B_TEXELS = 4;
@@ -77,11 +79,12 @@ export function shCentroidsSize(shN) {
  */
 export function clipTable(manifest) {
     const fps = manifest.timeline.frameRate;
+    const threshold = manifest.motion?.threshold ?? TEMPORAL_THRESHOLD;
     const table = new Float32Array(manifest.clips.length * CLIP_FLOATS);
     manifest.clips.forEach((clip, c) => {
         const G = clip.global, L = clip.local, R = clip.render;
         table.set([
-            (G.frameStart - L.frameStart) / fps, G.activeTimeStart, G.activeTimeEnd, 0,
+            (G.frameStart - L.frameStart) / fps, G.activeTimeStart, G.activeTimeEnd, threshold,
             G.coreTimeStart, G.coreTimeEnd, (R?.fadeInFrames ?? 0) / fps, (R?.fadeOutFrames ?? 0) / fps,
         ], c * CLIP_FLOATS);
     });
