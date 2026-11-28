@@ -20,6 +20,10 @@ import { ASOG_CHUNK_GLSL, ASOG_CHUNK_WGSL } from "./chunks.js";
 
 const UPLOAD_BAND = 16 * 1024 * 1024; // bytes per WebGPU texture write, each copied into the GPU process
 const AUDIO_MAX_DRIFT = 0.06;          // seconds the sound may drift from the clip before it seeks
+// WebGL: the engine copies all centres (12 bytes a splat) for its sort worker on every update; at ~1 GB/s
+// (3M splats every frame) that allocation fails, the frame's splat update is lost and the sorter has no
+// centres. Updates are paced to this many bytes a second: every frame up to ~300k splats, ~6/s at 3M.
+const CENTERS_COPY_RATE = 240e6;
 
 const PIXEL_FORMATS = {
     rgba8: pc.PIXELFORMAT_RGBA8,
@@ -102,6 +106,7 @@ export class AsogPlayer {
         this._sortSpare = null; // the centres buffer the worker gives back between jobs
         this._sortBusy = false;
         this._sortTime = NaN;     // the time of the centres last asked of the worker
+        this._nextSortAt = 0;     // performance.now() before which no new centres are asked for (CENTERS_COPY_RATE)
         this._prevTime = NaN;
         this._modelInv = new pc.Mat4();
         this._onUpdate = this._update.bind(this);
@@ -330,9 +335,11 @@ export class AsogPlayer {
         this._modelInv.copy(this.entity.getWorldTransform()).invert();
         gs.setParameter("uAsogModelInv", this._modelInv.data);
         // new centres only when the time moved (the sorter re-sorts camera moves by itself)
-        if (this._worker && !this._sortBusy && this.time !== this._sortTime && this._usesCpuSorter()) {
+        const now = performance.now();
+        if (this._worker && !this._sortBusy && this.time !== this._sortTime && now >= this._nextSortAt && this._usesCpuSorter()) {
             this._sortBusy = true;
             this._sortTime = this.time;
+            this._nextSortAt = now + this.numSplats * 12 / CENTERS_COPY_RATE * 1000;
             const out = this._sortSpare;
             this._sortSpare = null;
             this._worker.postMessage({ time: this.time, out }, [out]);
